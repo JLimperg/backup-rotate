@@ -1,0 +1,7 @@
+*.hi
+**/*.hi
+*.o
+**/*.o
+*.swp
+**/*.swp
+backup-rotate
