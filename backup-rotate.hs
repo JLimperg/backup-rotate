@@ -7,6 +7,7 @@ import           Logger
 -- Stdlib
 import           Control.Monad                         (when)
 import qualified Data.ByteString.Char8          as BS  (pack)
+import           Data.Function
 import           Data.List
 import qualified Data.Map                       as Map
 import           Data.Maybe
@@ -18,20 +19,37 @@ import qualified System.Directory               as Dir
 import           System.Environment
 import           System.FilePath
 import           System.IO
-import           System.Locale
+import           System.Locale                         (defaultTimeLocale)
 
 --------------------------------------------------------------------------------
 -- CONSTANTS
 
 backupRoot   = "/media/backup"
+dateFormat   = "%Y-%m-%d %H:%M"
 keepHourlies = 12
 keepDailies  = 7
 keepWeeklies = 4
-dateFormat   = "%Y-%m-%d %H:%M"
+
+intervals = [ Interval {iName = "hourly", iPredicate = hourlyP, keepFromInterval = 12}
+            , Interval {iName = "daily" , iPredicate = dailyP , keepFromInterval = 7 }
+            , Interval {iName = "weekly", iPredicate = weeklyP, keepFromInterval = 4 }
+            ]
+
+hourlyP b1 b2 = (localHour t1) == (localHour t2) &&
+                (localDay  t1) == (localDay  t2) &&
+                (localYear t1) == (localYear t2)
+                where t1 = bupTime b1; t2 = bupTime b2
+dailyP  b1 b2 = (localDay  t1) == (localDay  t2) &&
+                (localYear t1) == (localYear t2)
+                where t1 = bupTime b1; t2 = bupTime b2
+weeklyP b1 b2 = (localWeek t1) == (localWeek t2) &&
+                (localYear t1) == (localYear t2)
+                where t1 = bupTime b1; t2 = bupTime b2
 
 --------------------------------------------------------------------------------
 -- TYPES
 
+-- Backup
 type Backup = (FilePath, LocalTime)
 
 bupPath :: Backup -> FilePath
@@ -39,6 +57,19 @@ bupPath = fst
 
 bupTime :: Backup -> LocalTime
 bupTime = snd
+
+-- Interval
+data Interval = Interval { iName      :: String
+                         , iPredicate :: (Backup -> Backup -> Bool)
+                         , keepFromInterval  :: Int
+                         }
+
+instance Eq Interval where
+  a == b = (iName a) == (iName b)
+
+instance Show Interval where
+  show i = '(':(iName i) ++ ' ':(show $ keepFromInterval i) ++ ")"
+
 
 --------------------------------------------------------------------------------
 -- MAIN AND I/O
@@ -53,30 +84,18 @@ main = do
   bups  <- mapM dateForBackup $ backupDirs . sort $ bups'
 
   logI $ "Detected backups: " ++ (show bups)
-
-  let dates    = map snd bups
-      weeklies = filter (belongsTo $ weeklyDates dates) bups
-      dailies  = filter (belongsTo $ dailyDates  dates) bups
-      hourlies = filter (belongsTo $ hourlyDates dates) bups
-      removals = filter (belongsTo $ toRemove    dates) bups
-
-  logI $ "Detected weeklies: "          ++ (show weeklies)
-  logI $ "Detected dailies: "           ++ (show dailies)
-  logI $ "Detected hourlies: "          ++ (show hourlies)
-  logI $ "Detected backups to remove: " ++ (show removals)
+  let msg i = "Detected " ++ iName i ++ " backups: " ++ (show paths)
+              where paths = keepBups bups i
+  mapM_ (logI . msg) intervals
 
   logI "Moving backups to temporary folders to prevent overwriting..."
   mvtemp bups
 
   logI "Enumerating folders..."
-
-  enumerate "weekly" $ weeklies
-  enumerate "daily"  $ dailies
-  enumerate "hourly" $ hourlies
+  mvall $ enumerate bups
 
   logI "Removing obsolete folders..."
-
-  remove removals
+  remove $ toRemove bups
 
   logI "Rotation done."
 -- end main
@@ -87,13 +106,10 @@ mvtemp (x:xs) = do mv path (temp path)
                    mvtemp xs
                 where path = expand . bupPath $ x
 
-enumerate :: String -> [Backup] -> IO ()
-enumerate prefix [] = return ()
-enumerate prefix xs = do mv src dest
-                         enumerate prefix $ tail xs
-                      where src  = temp . expand . bupPath . last $ xs
-                            dest = expand (prefix ++ '.':no)
-                            no   = show . length . init $ xs
+mvall :: [(FilePath, FilePath)] -> IO ()
+mvall paths = do mapM_ (\(src, dest) -> mv src dest) paths
+                 return ()
+
 
 remove :: [Backup] -> IO ()
 remove []     = return ()
@@ -112,13 +128,27 @@ dateForBackup dir = do
 -- I/O-related
 
 backupDirs :: [FilePath] -> [FilePath]
-backupDirs [] = []
 backupDirs xs = filter (regexp "^(hourly|daily|weekly)\\.[0-9]$") xs
 
 strToDate :: String -> LocalTime
 strToDate s =
   fromJust (parseTime defaultTimeLocale dateFormat s :: Maybe LocalTime)
 
+enumerate :: [Backup] -> [(FilePath, FilePath)]
+enumerate []    = []
+enumerate bups  = concat $
+                  map (\i -> enumerateInterval (prefix i) (iBups i)) intervals
+                  where iBups  = sortBups . keepBups bups
+                        prefix = iName
+
+-- requires a sorted list of backups!
+enumerateInterval :: String -> [Backup] -> [(FilePath, FilePath)]
+enumerateInterval prefix []     = []
+enumerateInterval prefix bups =
+  (src, newpath prefix no):(enumerateInterval prefix (init bups))
+  where newpath p no = expand $ p ++ '.':no
+        src  = temp . expand . bupPath . last $ bups
+        no   = show . length . init $ bups
 
 -- Backups to be retained for each interval
 --
@@ -137,39 +167,27 @@ strToDate s =
 -- Note that at the hourly level, we don't check whether or not two backups
 -- have been created at different hours of the day. Hence, two backups made at
 -- 12:00 and 12:01 respectively will be kept as two 'hourlies'.
-weeklyDates, dailyDates, hourlyDates :: [LocalTime] -> [LocalTime]
+keepBups :: [Backup] -> Interval -> [Backup]
+keepBups []   _ = []
+keepBups bups i =
+  take (keepFromInterval i) $ intervalBups
+  where intervalBups    = map head $ groupBy (iPredicate i) $ freeBups
+        freeBups        = sortBups $ bups \\ (concatMap (keepBups bups) higherIntervals)
+        higherIntervals = drop ((fromJust $ elemIndex i intervals) + 1) intervals
 
-weeklyDates []    = []
-weeklyDates dates = take keepWeeklies uniqueWDays
-                 where uniqueWDays = map head $ groupBy cWeek $ reverse . sort $  dates
-                       cWeek x y   = ((localWeek x) == (localWeek y)) &&
-                                     ((localYear x) == (localYear y))
-
-dailyDates  []    = []
-dailyDates  dates = take keepDailies uniqueDays
-                 where uniqueDays  = map head $ groupBy cDay  $ reverse . sort $ (dates \\ (weeklyDates dates))
-                       cDay x y    = (diffDays (localDay x) (localDay y)) == 0
-
-hourlyDates []    = []
-hourlyDates dates = take keepHourlies $ reverse . sort $ (dates \\ (weeklyDates dates ++ dailyDates dates))
-
--- Predicate for the intervals
---
--- Tests if a backup (which is a tuple containing a path and a timestamp)
--- belongs to the specified interval. The interval is given as a list of
--- timestamps that belong to it.
-belongsTo :: [LocalTime] -> Backup -> Bool
-belongsTo int bup = (bupTime bup) `elem` int
 
 -- Backups to be removed
 --
 -- This is equivalent to 'all backups that do not belong to one of the
 -- intervals'.
-toRemove :: [LocalTime] -> [LocalTime]
-toRemove dates =
-  dates \\ ((weeklyDates dates) ++ (dailyDates dates) ++ (hourlyDates dates))
+toRemove :: [Backup] -> [Backup]
+toRemove bups =
+  bups \\ (concatMap (keepBups bups) intervals)
 
 -- HELPERS
+
+sortBups :: [Backup] -> [Backup]
+sortBups = sortBy (compare `on` snd)
 
 localWeek :: LocalTime -> Int
 localWeek = fst . mondayStartWeek . localDay
@@ -177,6 +195,9 @@ localWeek = fst . mondayStartWeek . localDay
 localYear :: LocalTime -> Integer
 localYear = year . toGregorian . localDay
             where year (y,m,d) = y
+
+localHour :: LocalTime -> Int
+localHour = todHour . localTimeOfDay
 
 regexp :: String -> String -> Bool
 regexp pat str = (BS.pack str) =~ (BS.pack pat) :: Bool
