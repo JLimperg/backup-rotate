@@ -26,13 +26,10 @@ import           System.Locale                         (defaultTimeLocale)
 
 backupRoot   = "/media/backup"
 dateFormat   = "%Y-%m-%d %H:%M"
-keepHourlies = 12
-keepDailies  = 7
-keepWeeklies = 4
 
-intervals = [ Interval {iName = "hourly", iPredicate = hourlyP, keepFromInterval = 12}
-            , Interval {iName = "daily" , iPredicate = dailyP , keepFromInterval = 7 }
-            , Interval {iName = "weekly", iPredicate = weeklyP, keepFromInterval = 4 }
+intervals = [ Interval {iName = "hourly", iPredicate = hourlyP, iKeep = 12}
+            , Interval {iName = "daily" , iPredicate = dailyP , iKeep = 7 }
+            , Interval {iName = "weekly", iPredicate = weeklyP, iKeep = 4 }
             ]
 
 hourlyP = timeP [ \a b -> (localHour a) == (localHour b)
@@ -61,14 +58,14 @@ bupTime = snd
 -- Interval
 data Interval = Interval { iName      :: String
                          , iPredicate :: (Backup -> Backup -> Bool)
-                         , keepFromInterval  :: Int
+                         , iKeep  :: Int
                          }
 
 instance Eq Interval where
   a == b = (iName a) == (iName b)
 
 instance Show Interval where
-  show i = '(':(iName i) ++ ' ':(show $ keepFromInterval i) ++ ")"
+  show i = '(':(iName i) ++ ' ':(show $ iKeep i) ++ ")"
 
 
 --------------------------------------------------------------------------------
@@ -84,8 +81,7 @@ main = do
   bups  <- mapM dateForBackup $ backupDirs . sort $ bups'
 
   logI $ "Detected backups: " ++ (show bups)
-  let msg i = "Detected " ++ iName i ++ " backups: " ++ (show paths)
-              where paths = keepBups bups i
+  let msg i = "Detected " ++ iName i ++ " backups: " ++ (show $ keepBups bups i)
   mapM_ (logI . msg) intervals
 
   logI "Moving backups to temporary folders to prevent overwriting..."
@@ -170,7 +166,7 @@ enumerateInterval prefix bups =
 keepBups :: [Backup] -> Interval -> [Backup]
 keepBups []   _ = []
 keepBups bups i =
-  take (keepFromInterval i) $ intervalBups
+  take (iKeep i) $ intervalBups
   where intervalBups    = map head $ groupBy (iPredicate i) $ freeBups
         freeBups        = sortBups $ bups \\ (concatMap (keepBups bups) higherIntervals)
         higherIntervals = drop ((fromJust $ elemIndex i intervals) + 1) intervals
