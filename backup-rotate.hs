@@ -24,10 +24,21 @@ import           System.Locale
 -- CONSTANTS
 
 backupRoot   = "/media/backup"
-keepHourlies = 1 -- 12
-keepDailies  = 1 -- 7
-keepWeeklies = 1 -- 4
+keepHourlies = 12
+keepDailies  = 7
+keepWeeklies = 4
 dateFormat   = "%Y-%m-%d %H:%M"
+
+--------------------------------------------------------------------------------
+-- TYPES
+
+type Backup = (FilePath, LocalTime)
+
+bupPath :: Backup -> FilePath
+bupPath = fst
+
+bupTime :: Backup -> LocalTime
+bupTime = snd
 
 --------------------------------------------------------------------------------
 -- MAIN AND I/O
@@ -70,27 +81,27 @@ main = do
   logI "Rotation done."
 -- end main
 
-mvtemp :: [(FilePath, LocalTime)] -> IO ()
+mvtemp :: [Backup] -> IO ()
 mvtemp []     = return ()
 mvtemp (x:xs) = do mv path (temp path)
                    mvtemp xs
-                where path = expand . fst $ x
+                where path = expand . bupPath $ x
 
-enumerate :: String -> [(FilePath, LocalTime)] -> IO ()
+enumerate :: String -> [Backup] -> IO ()
 enumerate prefix [] = return ()
 enumerate prefix xs = do mv src dest
                          enumerate prefix $ tail xs
-                      where src  = temp . expand . fst . last $ xs
+                      where src  = temp . expand . bupPath . last $ xs
                             dest = expand (prefix ++ '.':no)
                             no   = show . length . init $ xs
 
-remove :: [(FilePath, LocalTime)] -> IO ()
+remove :: [Backup] -> IO ()
 remove []     = return ()
 remove (x:xs) = do rm_r path
                    remove xs
-                where path = temp . expand . fst $ x
+                where path = temp . expand . bupPath $ x
 
-dateForBackup :: FilePath -> IO (FilePath, LocalTime)
+dateForBackup :: FilePath -> IO (Backup)
 dateForBackup dir = do
   date <- readFile $ (expand dir) </> "date"
   return (dir, strToDate date)
@@ -147,8 +158,8 @@ hourlyDates dates = take keepHourlies $ reverse . sort $ (dates \\ (weeklyDates 
 -- Tests if a backup (which is a tuple containing a path and a timestamp)
 -- belongs to the specified interval. The interval is given as a list of
 -- timestamps that belong to it.
-belongsTo :: [LocalTime] -> (FilePath, LocalTime) -> Bool
-belongsTo int bup = (snd bup) `elem` int
+belongsTo :: [LocalTime] -> Backup -> Bool
+belongsTo int bup = (bupTime bup) `elem` int
 
 -- Backups to be removed
 --
