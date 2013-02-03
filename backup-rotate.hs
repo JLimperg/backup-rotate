@@ -47,6 +47,7 @@ weeklyP = timeP [ \a b -> (localWeek a) == (localWeek b)
 -- TYPES
 
 -- Backup
+
 type Backup = (FilePath, LocalTime)
 
 bupPath :: Backup -> FilePath
@@ -56,6 +57,7 @@ bupTime :: Backup -> LocalTime
 bupTime = snd
 
 -- Interval
+
 data Interval = Interval { iName      :: String
                          , iPredicate :: (Backup -> Backup -> Bool)
                          , iKeep  :: Int
@@ -139,9 +141,8 @@ strToDate s =
 enumerate :: [Backup] -> [(FilePath, FilePath)]
 enumerate []    = []
 enumerate bups  = concat $
-                  map (\i -> enumerateInterval (prefix i) (iBups i)) intervals
+                  map (\i -> enumerateInterval (iName i) (iBups i)) intervals
                   where iBups  = sortBups . keepBups bups
-                        prefix = iName
 
 -- requires a sorted list of backups!
 enumerateInterval :: String -> [Backup] -> [(FilePath, FilePath)]
@@ -154,21 +155,7 @@ enumerateInterval prefix bups =
 
 -- Backups to be retained for each interval
 --
--- For each interval (weekly, daily, hourly), the corresponding function filters
--- a list of timestamps and selects those timestamps that shall be retained for
--- the interval. These functions already take other intervals into account,
--- whereby long-term intervals take precedence over short-term intervals. For
--- instance:
---
--- 1. If one backup has been made in one week, there will be one weekly.
--- 2. If two backups have been made in one week, there will be one weekly and
---    one daily.
--- 3. If four backups have been made in one week, there will be one weekly,
---    one daily and two hourlies.
---
--- Note that at the hourly level, we don't check whether or not two backups
--- have been created at different hours of the day. Hence, two backups made at
--- 12:00 and 12:01 respectively will be kept as two 'hourlies'.
+-- For an explanation of the algorithm, see the README.
 keepBups :: [Backup] -> Interval -> [Backup]
 keepBups []   _ = []
 keepBups bups i =
