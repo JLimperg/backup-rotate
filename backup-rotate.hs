@@ -77,10 +77,12 @@ main = do
   logI "Beginning rotation."
   logI $ "Processing directory '" ++ backupRoot ++ "'"
 
+  logI $ "Detecting backups according to basename pattern " ++ backupDirPat
   bups' <- Dir.getDirectoryContents backupRoot
+  logI $ "Possible backup directories: " ++ (show bups')
   bups  <- mapM dateForBackup $ backupDirs . sort $ bups'
-
   logI $ "Detected backups: " ++ (show bups)
+
   let msg i = "Detected " ++ iName i ++ " backups: " ++ (show $ keepBups bups i)
   mapM_ (logI . msg) intervals
 
@@ -123,8 +125,12 @@ dateForBackup dir = do
 
 -- I/O-related
 
+backupDirPat :: String
+backupDirPat = "^(" ++ iNames ++ ")\\.[0-9]+$"
+               where iNames = concat $ intersperse "|" $ map iName intervals
+
 backupDirs :: [FilePath] -> [FilePath]
-backupDirs xs = filter (regexp "^(hourly|daily|weekly)\\.[0-9]$") xs
+backupDirs xs = filter (regexp backupDirPat) (map (last . splitPath) xs)
 
 strToDate :: String -> LocalTime
 strToDate s =
