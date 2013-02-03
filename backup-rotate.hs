@@ -35,16 +35,16 @@ intervals = [ Interval {iName = "hourly", iPredicate = hourlyP, keepFromInterval
             , Interval {iName = "weekly", iPredicate = weeklyP, keepFromInterval = 4 }
             ]
 
-hourlyP b1 b2 = (localHour t1) == (localHour t2) &&
-                (localDay  t1) == (localDay  t2) &&
-                (localYear t1) == (localYear t2)
-                where t1 = bupTime b1; t2 = bupTime b2
-dailyP  b1 b2 = (localDay  t1) == (localDay  t2) &&
-                (localYear t1) == (localYear t2)
-                where t1 = bupTime b1; t2 = bupTime b2
-weeklyP b1 b2 = (localWeek t1) == (localWeek t2) &&
-                (localYear t1) == (localYear t2)
-                where t1 = bupTime b1; t2 = bupTime b2
+hourlyP = timeP [ \a b -> (localHour a) == (localHour b)
+                , \a b -> (localDay  a) == (localDay  b)
+                , \a b -> (localYear a) == (localYear b)
+                ]
+dailyP  = timeP [ \a b -> (localDay  a) == (localDay  b)
+                , \a b -> (localYear a) == (localYear b)
+                ]
+weeklyP = timeP [ \a b -> (localWeek a) == (localWeek b)
+                , \a b -> (localYear a) == (localYear b)
+                ]
 
 --------------------------------------------------------------------------------
 -- TYPES
@@ -217,3 +217,6 @@ temp path = path ++ ".tmp"
 
 expand :: FilePath -> FilePath
 expand src = backupRoot </> src
+
+timeP :: [(LocalTime -> LocalTime -> Bool)] -> (Backup -> Backup -> Bool)
+timeP fs a b = and $ map (\f -> f (bupTime a) (bupTime b)) fs
