@@ -32,15 +32,15 @@ intervals = [ Interval {iName = "hourly", iPredicate = hourlyP, iKeep = 12}
             , Interval {iName = "weekly", iPredicate = weeklyP, iKeep = 4 }
             ]
 
-hourlyP = timeP [ \a b -> (localHour a) == (localHour b)
-                , \a b -> (localDay  a) == (localDay  b)
-                , \a b -> (localYear a) == (localYear b)
+hourlyP = timeP [ (==) `on` localHour
+                , (==) `on` localDay
+                , (==) `on` localYear
                 ]
-dailyP  = timeP [ \a b -> (localDay  a) == (localDay  b)
-                , \a b -> (localYear a) == (localYear b)
+dailyP  = timeP [ (==) `on` localDay
+                , (==) `on` localYear
                 ]
-weeklyP = timeP [ \a b -> (localWeek a) == (localWeek b)
-                , \a b -> (localYear a) == (localYear b)
+weeklyP = timeP [ (==) `on` localWeek
+                , (==) `on` localYear
                 ]
 
 --------------------------------------------------------------------------------
@@ -64,7 +64,7 @@ data Interval = Interval { iName      :: String
                          }
 
 instance Eq Interval where
-  a == b = (iName a) == (iName b)
+  a == b = iName a == iName b
 
 instance Show Interval where
   show i = '(':(iName i) ++ ' ':(show $ iKeep i) ++ ")"
@@ -81,11 +81,11 @@ main = do
 
   logI $ "Detecting backups according to basename pattern " ++ backupDirPat
   bups' <- Dir.getDirectoryContents backupRoot
-  logI $ "Possible backup directories: " ++ (show bups')
+  logI $ "Possible backup directories: " ++ show bups'
   bups  <- mapM dateForBackup $ backupDirs . sort $ bups'
-  logI $ "Detected backups: " ++ (show bups)
+  logI $ "Detected backups: " ++ show bups
 
-  let msg i = "Detected " ++ iName i ++ " backups: " ++ (show $ keepBups bups i)
+  let msg i = "Detected " ++ iName i ++ " backups: " ++ show (keepBups bups i)
   mapM_ (logI . msg) intervals
 
   logI "Moving backups to temporary folders to prevent overwriting..."
@@ -107,19 +107,19 @@ mvtemp (x:xs) = do mv path (temp path)
                 where path = expand . bupPath $ x
 
 mvall :: [(FilePath, FilePath)] -> IO ()
-mvall paths = do mapM_ (\(src, dest) -> mv src dest) paths
+mvall paths = do mapM_ (uncurry mv) paths
                  return ()
 
 
 remove :: [Backup] -> IO ()
 remove []     = return ()
-remove (x:xs) = do rm_r path
+remove (x:xs) = do rmR path
                    remove xs
                 where path = temp . expand . bupPath $ x
 
-dateForBackup :: FilePath -> IO (Backup)
+dateForBackup :: FilePath -> IO Backup
 dateForBackup dir = do
-  date <- readFile $ (expand dir) </> "date"
+  date <- readFile $ expand dir </> "date"
   return (dir, strToDate date)
 
 --------------------------------------------------------------------------------
@@ -129,7 +129,7 @@ dateForBackup dir = do
 
 backupDirPat :: String
 backupDirPat = "^(" ++ iNames ++ ")\\.[0-9]+$"
-               where iNames = concat $ intersperse "|" $ map iName intervals
+               where iNames = intercalate "|" $ map iName intervals
 
 backupDirs :: [FilePath] -> [FilePath]
 backupDirs xs = filter (regexp backupDirPat) (map (last . splitPath) xs)
@@ -140,8 +140,7 @@ strToDate s =
 
 enumerate :: [Backup] -> [(FilePath, FilePath)]
 enumerate []    = []
-enumerate bups  = concat $
-                  map (\i -> enumerateInterval (iName i) (iBups i)) intervals
+enumerate bups  = concatMap (\i -> enumerateInterval (iName i) (iBups i)) intervals
                   where iBups  = sortBups . keepBups bups
 
 -- requires a sorted list of backups!
@@ -159,9 +158,9 @@ enumerateInterval prefix bups =
 keepBups :: [Backup] -> Interval -> [Backup]
 keepBups []   _ = []
 keepBups bups i =
-  take (iKeep i) $ intervalBups
-  where intervalBups    = map head $ groupBy (iPredicate i) $ freeBups
-        freeBups        = sortBups $ bups \\ (concatMap (keepBups bups) higherIntervals)
+  take (iKeep i) intervalBups
+  where intervalBups    = map head $ groupBy (iPredicate i) freeBups
+        freeBups        = sortBups $ bups \\ concatMap (keepBups bups) higherIntervals
         higherIntervals = drop ((fromJust $ elemIndex i intervals) + 1) intervals
 
 
@@ -171,7 +170,7 @@ keepBups bups i =
 -- intervals'.
 toRemove :: [Backup] -> [Backup]
 toRemove bups =
-  bups \\ (concatMap (keepBups bups) intervals)
+  bups \\ concatMap (keepBups bups) intervals
 
 -- HELPERS
 
@@ -189,15 +188,15 @@ localHour :: LocalTime -> Int
 localHour = todHour . localTimeOfDay
 
 regexp :: String -> String -> Bool
-regexp pat str = (BS.pack str) =~ (BS.pack pat) :: Bool
+regexp pat str = BS.pack str =~ BS.pack pat :: Bool
 
 mv :: FilePath -> FilePath -> IO ()
 mv src dest = do logI $ "mv '" ++ src ++ "' '" ++ dest ++ "'"
                  -- renameDirectory src dest
                  return ()
 
-rm_r :: FilePath -> IO ()
-rm_r dir = do logI $ "rm -r '" ++ dir ++ "'"
+rmR :: FilePath -> IO ()
+rmR dir = do logI $ "rm -r '" ++ dir ++ "'"
               -- removeDirectory dir
               return ()
 
@@ -208,4 +207,4 @@ expand :: FilePath -> FilePath
 expand src = backupRoot </> src
 
 timeP :: [(LocalTime -> LocalTime -> Bool)] -> (Backup -> Backup -> Bool)
-timeP fs a b = and $ map (\f -> f (bupTime a) (bupTime b)) fs
+timeP fs a b = all (\f -> f (bupTime a) (bupTime b)) fs
