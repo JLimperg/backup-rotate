@@ -1,0 +1,27 @@
+Name:                backup-rotate
+Version:             0.1
+Stability:           unstable
+Description:         Simple rotation for hourly/daily/weekly or custom backups
+Category:            System
+Homepage:            http://github.com/JLimperg/backup-rotate
+License:             MIT
+License-file:        LICENSE
+Author:              Jannis Limperg
+Maintainer:          jannis@limperg.de
+Build-Type:          Simple
+Cabal-Version:       >= 1.16
+x-follows-version-policy: Semantic Versioning
+
+Executable backup-rotate
+  Main-is:           BackupRotate.hs
+  hs-source-dirs:    src
+  Build-Depends:     base             >= 4        && <= 5 ,
+                     bytestring       >= 0.10.0.0 && <= 1 ,
+                     containers       >= 0.5.0.0  && <= 1 ,
+                     directory        >= 1.2.0.0  && <= 2 ,
+                     filepath         >= 1.3.0.1  && <= 2 ,
+                     hslogger         >= 1.2.1    && <= 2 ,
+                     old-locale       >= 1.0.0.4  && <= 2 ,
+                     pcre-light       >= 0.4      && <= 1 ,
+                     pcre-light-extra >= 0.0.0    && <= 1 ,
+                     time             >= 1.4.0.1  && <= 2
