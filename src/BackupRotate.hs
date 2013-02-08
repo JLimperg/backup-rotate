@@ -200,8 +200,8 @@ mv src dest = do logI $ "mv '" ++ src ++ "' '" ++ dest ++ "'"
 
 rmR :: FilePath -> IO ()
 rmR dir = do logI $ "rm -r '" ++ dir ++ "'"
-              -- removeDirectory dir
-              return ()
+             -- removeDirectory dir
+             return ()
 
 temp :: FilePath -> FilePath
 temp path = path ++ ".tmp"
