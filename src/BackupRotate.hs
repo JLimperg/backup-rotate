@@ -144,7 +144,7 @@ strToDate s =
 enumerate :: [Backup] -> [(FilePath, FilePath)]
 enumerate []    = []
 enumerate bups  = concatMap (\i -> enumerateInterval (iName i) (iBups i)) intervals
-                  where iBups  = sortBups . keepBups bups
+                  where iBups  = keepBups bups
 
 -- requires a sorted list of backups!
 enumerateInterval :: String -> [Backup] -> [(FilePath, FilePath)]
@@ -161,7 +161,7 @@ enumerateInterval prefix bups =
 keepBups :: [Backup] -> Interval -> [Backup]
 keepBups []   _ = []
 keepBups bups i =
-  take (iKeep i) intervalBups
+  take (iKeep i) $ reverse intervalBups
   where intervalBups    = map head $ groupBy (iPredicate i) freeBups
         freeBups        = sortBups $ bups \\ concatMap (keepBups bups) higherIntervals
         higherIntervals = drop ((fromJust $ elemIndex i intervals) + 1) intervals
