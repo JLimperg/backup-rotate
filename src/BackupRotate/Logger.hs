@@ -1,8 +1,8 @@
 -- Copyright (c) 2013 Jannis Limperg
 -- License: MIT. See the LICENSE file.
 
-module Logger
-( setupLog
+module BackupRotate.Logger (
+  setupLog
 , logD
 , logI
 , logW

@@ -1,11 +1,13 @@
 -- Copyright (c) 2013 Jannis Limperg
 -- License: MIT. See the LICENSE file.
 
+module BackupRotate.Main where
+
 --------------------------------------------------------------------------------
 -- IMPORTS
 
 -- Custom
-import           Logger
+import           BackupRotate.Logger
 
 -- Stdlib
 import           Control.Monad                         (when)
