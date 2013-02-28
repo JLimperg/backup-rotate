@@ -209,14 +209,12 @@ regexp pat str = BS.pack str =~ BS.pack pat :: Bool
 mv :: FilePath -> FilePath -> IO ()
 mv src dest = do
     logI $ "mv '" ++ src ++ "' '" ++ dest ++ "'"
-    -- renameDirectory src dest
-    return ()
+    Dir.renameDirectory src dest
 
 rmR :: FilePath -> IO ()
 rmR dir = do
     logI $ "rm -r '" ++ dir ++ "'"
-    -- removeDirectory dir
-    return ()
+    Dir.removeDirectoryRecursive dir
 
 temp :: FilePath -> FilePath
 temp path = path ++ ".tmp"

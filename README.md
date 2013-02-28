@@ -1,16 +1,16 @@
 # backup-rotate
 
-THIS SOFTWARE IS NEITHER STABLE NOR TESTED PROPERLY. Use it only if you've
-reviewed the code and believe that it does what you think it does.
+NOTE: Please test this software carefully in your specific environment before
+trusting it with your backups.
 
 ## Synopsis
 
 The `backup-rotate` program is a simple script that can be used to keep backups
 in specified intervals, such as hourly, daily and weekly. It is intended to be
 used together with a utility like [rsnapshot](http://www.rsnapshot.org/) that
-creates hourly incremental backups.  Its advantage over the builtin rsnapshot
-rotation mechanism is that it handles 'missed' backups (where the computer was
-not turned on when the backup would have been made) gracefully.
+regularly creates (incremental) backups. Its advantage over the builtin
+rsnapshot rotation mechanism is that it handles 'missed' backups (where the
+computer was not turned on when the backup would have been made) gracefully.
 
 ## Configuration
 
