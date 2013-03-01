@@ -6,7 +6,7 @@ module BackupRotate.Main where
 --------------------------------------------------------------------------------
 -- IMPORTS
 
-import           Control.Monad                         (when)
+import           Control.Monad                         (when, liftM)
 import qualified Data.ByteString.Char8          as BS  (pack)
 import           Data.Function
 import           Data.List
@@ -20,6 +20,7 @@ import qualified System.Directory               as Dir
 import           System.Environment
 import           System.FilePath
 import           System.IO
+import           System.IO.Error
 import           System.Locale                         (defaultTimeLocale)
 
 import           BackupRotate.Logger
@@ -85,10 +86,11 @@ main = do
     logI $ "Detecting backups according to basename pattern " ++ backupDirPat
     bups' <- Dir.getDirectoryContents backupRoot
     logI $ "Possible backup directories: " ++ show bups'
-    bups  <- mapM dateForBackup $ backupDirs . sort $ bups'
+    bups  <- liftM catMaybes $ mapM dateForBackup $ backupDirs . sort $ bups'
     logI $ "Detected backups: " ++ show bups
 
-    let msg i = "Detected " ++ iName i ++ " backups: " ++ show (keepBups bups i)
+    let msg i = "Detected " ++ iName i ++ " backups: " ++
+                show (keepBups bups i)
     mapM_ (logI . msg) intervals
 
     logI "Moving backups to temporary folders to prevent overwriting..."
@@ -112,8 +114,7 @@ mvtemp (x:xs) = do
     path = expand . bupPath $ x
 
 mvall :: [(FilePath, FilePath)] -> IO ()
-mvall paths = do
-    mapM_ (uncurry mv) paths
+mvall = mapM_ (uncurry mv)
 
 
 remove :: [Backup] -> IO ()
@@ -124,10 +125,19 @@ remove (x:xs) = do
   where
     path = temp . expand . bupPath $ x
 
-dateForBackup :: FilePath -> IO Backup
-dateForBackup dir = do
-  date <- readFile $ expand dir </> "date"
-  return (dir, strToDate date)
+dateForBackup :: FilePath -> IO (Maybe Backup)
+dateForBackup dir =
+    readDate `catchIOError` handler
+  where
+    readDate     = do
+      date <- readFile $ expand dir </> "date"
+      return $ Just (dir, strToDate date)
+    handler ioe  = do
+      let fname = fromMaybe "(unknown file)" $ ioeGetFileName ioe
+      logE $ "Date file '" ++ fname ++ "' could not be read: " ++
+             ioeGetErrorString ioe ++ ". The directory will not be processed" ++
+             " and may get overwritten."
+      return Nothing
 
 --------------------------------------------------------------------------------
 -- FUNCTIONS
@@ -159,7 +169,7 @@ enumerate bups =
 enumerateInterval :: String -> [Backup] -> [(FilePath, FilePath)]
 enumerateInterval prefix []   = []
 enumerateInterval prefix bups =
-    (src, newpath prefix no):(enumerateInterval prefix (init bups))
+    (src, newpath prefix no) : enumerateInterval prefix (init bups)
   where
     newpath p no = expand $ p ++ '.':no
     src          = temp . expand . bupPath . last $ bups
@@ -176,7 +186,7 @@ keepBups bups i =
     intervalBups    = map head $ groupBy (iPredicate i) freeBups
     freeBups        = sortBups $ bups \\ unfreeBups
     unfreeBups      = concatMap (keepBups bups) higherIntervals
-    higherIntervals = drop ((fromJust $ elemIndex i intervals) + 1) intervals
+    higherIntervals = drop (fromJust (elemIndex i intervals) + 1) intervals
 
 
 -- Backups to be removed
