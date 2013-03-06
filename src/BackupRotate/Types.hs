@@ -1,12 +1,14 @@
 module BackupRotate.Types (
+  -- Types
   Backup
 , Interval(..)
 
+  -- Functions
 , bupPath
 , bupTime
 ) where
 
-import Data.Time
+import Data.Time (LocalTime)
 
 -- Backup
 

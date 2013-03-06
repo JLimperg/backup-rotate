@@ -6,21 +6,17 @@ module BackupRotate.Main where
 --------------------------------------------------------------------------------
 -- IMPORTS
 
-import           Control.Monad                         (when, liftM)
+import           Control.Monad                         (liftM)
 import qualified Data.ByteString.Char8          as BS  (pack)
-import           Data.Function
+import           Data.Function                         (on)
 import           Data.List
-import qualified Data.Map                       as Map
 import           Data.Maybe
 import           Data.Time
-import           Data.Time.Calendar.OrdinalDate
-import           Data.Time.Format
+import           Data.Time.Calendar.OrdinalDate        (mondayStartWeek)
 import           Text.Regex.PCRE.Light.Extra           ((=~))
 import qualified System.Directory               as Dir
-import           System.Environment
-import           System.FilePath
-import           System.IO
-import           System.IO.Error
+import           System.FilePath                       ((</>), splitPath)
+import           System.IO.Error                       (catchIOError)
 import           System.Locale                         (defaultTimeLocale)
 
 import           BackupRotate.Errors            as E
@@ -30,14 +26,19 @@ import           BackupRotate.Types
 --------------------------------------------------------------------------------
 -- CONSTANTS
 
+backupRoot :: FilePath
 backupRoot = "/media/backup"
+
+dateFormat :: String
 dateFormat = "%Y-%m-%d %H:%M"
 
+intervals :: [Interval]
 intervals = [ Interval {iName = "hourly", iPredicate = hourlyP, iKeep = 12}
             , Interval {iName = "daily" , iPredicate = dailyP , iKeep = 7 }
             , Interval {iName = "weekly", iPredicate = weeklyP, iKeep = 4 }
             ]
 
+hourlyP, dailyP, weeklyP :: Backup -> Backup -> Bool
 hourlyP = timeP [ (==) `on` localHour
                 , (==) `on` localDay
                 , (==) `on` localYear
@@ -52,6 +53,7 @@ weeklyP = timeP [ (==) `on` localWeek
 --------------------------------------------------------------------------------
 -- MAIN AND I/O
 
+main :: IO ()
 main = do
     setupLog
 
@@ -129,9 +131,9 @@ enumerateInterval _      []   = []
 enumerateInterval prefix bups =
     (src, newpath prefix no) : enumerateInterval prefix (init bups)
   where
-    newpath p no = expand $ p ++ '.':no
-    src          = temp . expand . bupPath . last $ bups
-    no           = show . length . init $ bups
+    newpath p no' = expand $ p ++ '.':no'
+    src           = temp . expand . bupPath . last $ bups
+    no            = show . length . init $ bups
 
 -- Backups to be retained for each interval
 --
@@ -145,7 +147,6 @@ keepBups bups i =
     freeBups        = sortBups $ bups \\ unfreeBups
     unfreeBups      = concatMap (keepBups bups) higherIntervals
     higherIntervals = drop (fromJust (elemIndex i intervals) + 1) intervals
-
 
 -- Backups to be removed
 --
@@ -164,10 +165,7 @@ localWeek = fst . mondayStartWeek . localDay
 localHour = todHour . localTimeOfDay
 
 localYear :: LocalTime -> Integer
-localYear =
-    year . toGregorian . localDay
-  where
-    year (y,m,d) = y
+localYear = (\(y,_,_) -> y) . toGregorian . localDay
 
 regexp :: String -> String -> Bool
 regexp pat str = BS.pack str =~ BS.pack pat :: Bool
@@ -188,5 +186,5 @@ temp path = path ++ ".tmp"
 expand :: FilePath -> FilePath
 expand src = backupRoot </> src
 
-timeP :: [LocalTime -> LocalTime -> Bool] -> (Backup -> Backup -> Bool)
+timeP :: [LocalTime -> LocalTime -> Bool] -> Backup -> Backup -> Bool
 timeP fs a b = all (\f -> f (bupTime a) (bupTime b)) fs

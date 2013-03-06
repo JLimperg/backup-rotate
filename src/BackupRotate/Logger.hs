@@ -9,16 +9,12 @@ module BackupRotate.Logger (
 , logE
 ) where
 
-import           Data.Time
-import           Data.Time.Format
-
-import           System.Locale
-import           System.Log.Logger
-import qualified System.Log.Handler.Simple as LogHandler (streamHandler)
+import Data.Time
+import System.Locale     (defaultTimeLocale)
+import System.Log.Logger
 
 setupLog :: IO ()
-setupLog = do
-    updateGlobalLogger "log" (setLevel INFO)
+setupLog = updateGlobalLogger "log" (setLevel INFO)
 
 logC :: Priority -> String -> IO ()
 logC prio msg = do

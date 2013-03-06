@@ -2,7 +2,7 @@ module BackupRotate.Errors (
   dateFileHandler
 ) where
 
-import Data.Maybe
+import Data.Maybe           (fromMaybe)
 import System.IO.Error
 
 import BackupRotate.Logger
