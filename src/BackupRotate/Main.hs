@@ -23,7 +23,9 @@ import           System.IO
 import           System.IO.Error
 import           System.Locale                         (defaultTimeLocale)
 
+import           BackupRotate.Errors            as E
 import           BackupRotate.Logger
+import           BackupRotate.Types
 
 --------------------------------------------------------------------------------
 -- CONSTANTS
@@ -46,33 +48,6 @@ dailyP  = timeP [ (==) `on` localDay
 weeklyP = timeP [ (==) `on` localWeek
                 , (==) `on` localYear
                 ]
-
---------------------------------------------------------------------------------
--- TYPES
-
--- Backup
-
-type Backup = (FilePath, LocalTime)
-
-bupPath :: Backup -> FilePath
-bupPath = fst
-
-bupTime :: Backup -> LocalTime
-bupTime = snd
-
--- Interval
-
-data Interval = Interval { iName      :: String
-                         , iPredicate :: (Backup -> Backup -> Bool)
-                         , iKeep      :: Int
-                         }
-
-instance Eq Interval where
-  a == b = iName a == iName b
-
-instance Show Interval where
-  show i = '(':(iName i) ++ ' ':(show $ iKeep i) ++ ")"
-
 
 --------------------------------------------------------------------------------
 -- MAIN AND I/O
@@ -106,38 +81,24 @@ main = do
 -- end main
 
 mvtemp :: [Backup] -> IO ()
-mvtemp []     = return ()
-mvtemp (x:xs) = do
-    mv path (temp path)
-    mvtemp xs
+mvtemp =
+    mapM_ $ \p -> mv (path p) (temp . path $ p)
   where
-    path = expand . bupPath $ x
+    path = expand . bupPath
 
 mvall :: [(FilePath, FilePath)] -> IO ()
 mvall = mapM_ (uncurry mv)
 
-
 remove :: [Backup] -> IO ()
-remove []     = return ()
-remove (x:xs) = do
-    rmR path
-    remove xs
-  where
-    path = temp . expand . bupPath $ x
+remove = mapM_ $ rmR . temp . expand . bupPath
 
 dateForBackup :: FilePath -> IO (Maybe Backup)
 dateForBackup dir =
-    readDate `catchIOError` handler
+    readDate `catchIOError` E.dateFileHandler
   where
-    readDate     = do
-      date <- readFile $ expand dir </> "date"
+    readDate =
+      readFile (expand dir </> "date") >>= \date ->
       return $ Just (dir, strToDate date)
-    handler ioe  = do
-      let fname = fromMaybe "(unknown file)" $ ioeGetFileName ioe
-      logE $ "Date file '" ++ fname ++ "' could not be read: " ++
-             ioeGetErrorString ioe ++ ". The directory will not be processed" ++
-             " and may get overwritten."
-      return Nothing
 
 --------------------------------------------------------------------------------
 -- FUNCTIONS
@@ -151,8 +112,7 @@ backupDirPat =
     iNames = intercalate "|" $ map iName intervals
 
 backupDirs :: [FilePath] -> [FilePath]
-backupDirs xs =
-    filter (regexp backupDirPat) (map (last . splitPath) xs)
+backupDirs xs = filter (regexp backupDirPat) (map (last . splitPath) xs)
 
 strToDate :: String -> LocalTime
 strToDate s =
@@ -161,13 +121,11 @@ strToDate s =
 enumerate :: [Backup] -> [(FilePath, FilePath)]
 enumerate []   = []
 enumerate bups =
-    concatMap (\i -> enumerateInterval (iName i) (iBups i)) intervals
-  where
-    iBups = keepBups bups
+    concatMap (\i -> enumerateInterval (iName i) (keepBups bups i)) intervals
 
 -- requires a sorted list of backups!
 enumerateInterval :: String -> [Backup] -> [(FilePath, FilePath)]
-enumerateInterval prefix []   = []
+enumerateInterval _      []   = []
 enumerateInterval prefix bups =
     (src, newpath prefix no) : enumerateInterval prefix (init bups)
   where
@@ -201,17 +159,15 @@ toRemove bups = bups \\ concatMap (keepBups bups) intervals
 sortBups :: [Backup] -> [Backup]
 sortBups = sortBy (compare `on` snd)
 
-localWeek :: LocalTime -> Int
+localHour, localWeek :: LocalTime -> Int
 localWeek = fst . mondayStartWeek . localDay
+localHour = todHour . localTimeOfDay
 
 localYear :: LocalTime -> Integer
 localYear =
     year . toGregorian . localDay
   where
     year (y,m,d) = y
-
-localHour :: LocalTime -> Int
-localHour = todHour . localTimeOfDay
 
 regexp :: String -> String -> Bool
 regexp pat str = BS.pack str =~ BS.pack pat :: Bool
@@ -232,5 +188,5 @@ temp path = path ++ ".tmp"
 expand :: FilePath -> FilePath
 expand src = backupRoot </> src
 
-timeP :: [(LocalTime -> LocalTime -> Bool)] -> (Backup -> Backup -> Bool)
+timeP :: [LocalTime -> LocalTime -> Bool] -> (Backup -> Backup -> Bool)
 timeP fs a b = all (\f -> f (bupTime a) (bupTime b)) fs
