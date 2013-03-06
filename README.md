@@ -110,9 +110,12 @@ versions as well. No GHC-specific extensions have been used.
 ## Known Issues and Shortcomings
 
 1. The script does no error handling whatsoever, which means that it will fail
-   immediately if anything I/O-related goes wrong. On the upside, this also
-   means that if your backups are messed up, it probably won't mess them up any
-   further.
+   immediately if anything I/O-related goes wrong. (On the upside, if your
+   backups are messed up, it probably won't mess them up any further.)
+   The one exception to this rule is that if a `date` file cannot be read, the
+   script will completely ignore the corresponding backup, assuming that it is
+   defect in some way. This means that the backup may get overridden while
+   renaming other backup directories.
 2. The script is currently not unit tested.
 3. The script can only be customised by editing constants in the source code
    and recompiling. A proper CLI would be more practical.
