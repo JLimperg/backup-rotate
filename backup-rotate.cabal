@@ -1,18 +1,18 @@
-Name:                backup-rotate
-Version:             0.1
-Stability:           unstable
-Description:         Simple rotation for hourly/daily/weekly or custom backups
-Category:            System
-Homepage:            http://github.com/JLimperg/backup-rotate
-License:             MIT
-License-file:        LICENSE
-Author:              Jannis Limperg
-Maintainer:          jannis@limperg.de
-Build-Type:          Simple
-Cabal-Version:       >= 1.16
-x-follows-version-policy: Semantic Versioning
+name:                backup-rotate
+version:             0.1
+stability:           unstable
+description:         Simple rotation for hourly/daily/weekly or custom backups
+category:            System
+homepage:            http://github.com/JLimperg/backup-rotate
+license:             MIT
+license-file:        LICENSE
+author:              Jannis Limperg
+maintainer:          jannis@limperg.de
+build-type:          Simple
+cabal-version:       >= 1.16
 
 executable backup-rotate
+  default-language:  Haskell2010
   main-is:           backup-rotate.hs
   hs-source-dirs:    src
   build-depends:     base             >= 4        && <= 5
